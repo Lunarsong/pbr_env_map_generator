@@ -9,8 +9,7 @@ cc_binary(
         "//ktx",
     ],
     data = [
-        "data/newport_loft.hdr",
-        "data/back.jpg",
+        "data/source.hdr",
         "data/equirectangular_to_cubemap.glslf",
         "data/equirectangular_to_cubemap.glslv",
         "data/irradiance_convolution.glslf",

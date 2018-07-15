@@ -13,6 +13,7 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <ktx.h>
 
 namespace {
 template <typename T>
@@ -457,8 +458,6 @@ void WriteCubemapToFile(std::string file, unsigned int texture,
   // int stbi_write_png(char const* filename, int w, int h, int comp,
   //                   const void* data, int stride_in_bytes);
 
-  glPixelStorei(GL_PACK_ALIGNMENT, 1);
-  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
   std::string filenames[] = {
       file + "_right",  file + "_left",  file + "_top",
       file + "_bottom", file + "_front", file + "_back",
@@ -489,6 +488,52 @@ void WriteCubemapToFile(std::string file, unsigned int texture,
   delete[] pixels_bytes;
 }
 
+void WriteCubemapToKtx(std::string file, unsigned int texture,
+                        int cubemap_width, int cubemap_height, int num_mips = 1) {
+  static const std::string kExtension = ".ktx";
+  ktx::KtxHeader header;
+  header.gl_type = GL_FLOAT;
+  header.gl_format = GL_RGB;
+  header.gl_internal_format = GL_RGB16F;
+  header.gl_base_internal_format = GL_RGB;
+  header.pixel_width = cubemap_width;
+  header.pixel_height = cubemap_height;
+  header.pixel_depth = 0;
+  header.number_of_array_elements = 0;
+  header.number_of_faces = 6;
+  header.number_of_mipmap_levels = num_mips;
+  header.bytes_of_key_value_data = 0;
+  
+  std::ofstream fstream;
+  fstream.open ((file + kExtension).c_str(), std::ios::out | std::ios::trunc | std::ios::binary); 
+  if (!fstream.is_open()) {
+    return;
+  }
+
+  fstream.write(reinterpret_cast<const char*>(&header), sizeof(ktx::KtxHeader));
+  
+  char* pixels = new char[cubemap_width * cubemap_height * 3 * 6 * sizeof(float)];
+  for (int mip = 0; mip < num_mips; ++mip) {
+    // Image size for all 6 faces of this mip.
+    unsigned int mip_width = cubemap_width * std::pow(0.5, mip);
+    unsigned int mip_height = cubemap_height * std::pow(0.5, mip);
+    uint32_t image_size = mip_width * mip_height * 3 * sizeof(float);
+    fstream.write(reinterpret_cast<const char*>(&image_size), sizeof(uint32_t));
+    
+    glBindTexture(GL_TEXTURE_CUBE_MAP, texture);
+    for (int i = 0; i < 6; ++i) {
+      size_t offset = image_size * i;
+      glGetTexImage(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, mip, GL_RGB, GL_FLOAT,
+                    static_cast<void*>(pixels + offset));
+    };
+
+    fstream.write(pixels, image_size * 6);
+  }
+
+  delete[] pixels;
+  fstream.close();
+}
+
 int main(int argc, char* argv[]) {
   stbi_set_flip_vertically_on_load(true);
   GLFWwindow* window = InitWindow();
@@ -500,15 +545,21 @@ int main(int argc, char* argv[]) {
   // map.
   glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 
-  int prefilter_width = 512;
-  int prefilter_height = 512;
+  const int cubemap_width = 1024;
+  const int cubemap_height = 1024;
+  const int irradiance_width = 128;
+  const int irradiance_height = 128;
+  const int prefilter_width = 1024;
+  const int prefilter_height = 1024;
 
   unsigned int cubemap_texture =
-      ConvertEquirectangularToCubemap("data/newport_loft.hdr", 512, 512);
-  WriteCubemapToFile("cubemap", cubemap_texture, 512, 512);
+      ConvertEquirectangularToCubemap("data/source.hdr", cubemap_width, cubemap_height);
+  WriteCubemapToFile("cubemap", cubemap_texture, cubemap_width, cubemap_height);
+  WriteCubemapToKtx("cubemap", cubemap_texture, cubemap_width, cubemap_height, 1);
   unsigned int irradiance_texture =
-      GenerateIrradianceMap(cubemap_texture, 512, 512);
-  WriteCubemapToFile("irradiance", irradiance_texture, 512, 512);
+      GenerateIrradianceMap(cubemap_texture, irradiance_width, irradiance_height);
+  WriteCubemapToFile("irradiance", irradiance_texture, irradiance_width, irradiance_height);
+  WriteCubemapToKtx("irradiance", irradiance_texture, irradiance_width, irradiance_height, 1);
 
   // Generate the prefilter map.
   unsigned int prefilter_texture = GeneratePreFilteredMap(
@@ -522,6 +573,8 @@ int main(int argc, char* argv[]) {
     WriteCubemapToFile("prefilter_" + std::to_string(mip), prefilter_texture,
                        width, height, mip);
   }
+  WriteCubemapToKtx("prefilter", prefilter_texture, prefilter_width, prefilter_height, num_mips);
+                       
 
   std::cout << "Success!" << std::endl;
 
