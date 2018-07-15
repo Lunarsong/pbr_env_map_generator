@@ -6,6 +6,7 @@ cc_binary(
         "@glfw//:glfw",
         "@mathfu//:mathfu",
         "//third_party/glad:glad",
+        "//ktx",
     ],
     data = [
         "data/newport_loft.hdr",
