@@ -607,10 +607,11 @@ GLenum GetTextureFormatForAstc(int footprint_x, int footprint_y) {
       }
     } break;
     default: {
+      // Invalid format?
       assert(false);
-      return GL_COMPRESSED_RGBA_ASTC_4x4;
     }
   }
+  return GL_COMPRESSED_RGBA_ASTC_4x4;
 }
 
 void WriteCubemapToKtxAsASTC(std::string file, unsigned int texture,
@@ -710,6 +711,8 @@ int main(int argc, char* argv[]) {
                      irradiance_height);
   WriteCubemapToKtx("irradiance", irradiance_texture, irradiance_width,
                     irradiance_height, 1);
+  WriteCubemapToKtxAsASTC("irradiance_astc", irradiance_texture,
+                          irradiance_width, irradiance_height, 1);
 
   // Generate the prefilter map.
   unsigned int prefilter_texture = GeneratePreFilteredMap(
@@ -723,7 +726,9 @@ int main(int argc, char* argv[]) {
     WriteCubemapToFile("prefilter_" + std::to_string(mip), prefilter_texture,
                        width, height, mip);
   }
-  WriteCubemapToKtxAsASTC("prefilter", prefilter_texture, prefilter_width,
+  WriteCubemapToKtx("prefilter", prefilter_texture, prefilter_width,
+                    prefilter_height, num_mips);
+  WriteCubemapToKtxAsASTC("prefilter_astc", prefilter_texture, prefilter_width,
                           prefilter_height, num_mips, 4, 4);
 
   std::cout << "Success!" << std::endl;
