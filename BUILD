@@ -1,10 +1,11 @@
 cc_binary(
     name = "tool",
-    srcs = glob(["main.cc"]),
+    srcs = ["main.cc", "astc.cc", "astc.h"],
     deps = [
         "@stb//:image",
         "@glfw//:glfw",
         "@mathfu//:mathfu",
+        "@astc_encoder//:astc_encoder",
         "//third_party/glad:glad",
         "//ktx",
     ],

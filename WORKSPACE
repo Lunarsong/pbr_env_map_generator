@@ -20,3 +20,11 @@ new_git_repository(
     init_submodules = 0,
     build_file = "third_party/mathfu.BUILD",
 )
+
+new_git_repository(
+    name = "astc_encoder",
+    remote = "https://github.com/ARM-software/astc-encoder.git",
+    commit = "a47b80f081f10c43d96bd10bcb713c71708041b9",
+    init_submodules = 0,
+    build_file = "third_party/astc.BUILD",
+)

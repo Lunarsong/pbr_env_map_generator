@@ -21,4 +21,15 @@ struct KtxHeader {
   uint32_t bytes_of_key_value_data;
 };
 
+struct KtxKeyValuePair {
+  uint32_t key_and_value_byte_size;
+  const char* key;
+  const char* value;
+  const char* padding;
+};
+
+uint32_t CalculateKeyValuePairPadding(uint32_t key_and_value_byte_size);
+uint32_t GetNumKeyValuePairs(const char* mem, uint32_t bytes_of_key_value_data);
+bool GetKeyValuePair(uint32_t index, uint32_t bytes_of_key_value_data,
+                     const char* mem, KtxKeyValuePair* out);
 }  // namespace ktx

@@ -7,13 +7,14 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
+#include <ktx.h>
 #include <mathfu/constants.h>
 #include <mathfu/glsl_mappings.h>
 #include <cassert>
 #include <fstream>
 #include <iostream>
 #include <string>
-#include <ktx.h>
+#include "astc.h"
 
 namespace {
 template <typename T>
@@ -489,7 +490,8 @@ void WriteCubemapToFile(std::string file, unsigned int texture,
 }
 
 void WriteCubemapToKtx(std::string file, unsigned int texture,
-                        int cubemap_width, int cubemap_height, int num_mips = 1) {
+                       int cubemap_width, int cubemap_height,
+                       int num_mips = 1) {
   static const std::string kExtension = ".ktx";
   ktx::KtxHeader header;
   header.gl_type = GL_FLOAT;
@@ -503,23 +505,25 @@ void WriteCubemapToKtx(std::string file, unsigned int texture,
   header.number_of_faces = 6;
   header.number_of_mipmap_levels = num_mips;
   header.bytes_of_key_value_data = 0;
-  
+
   std::ofstream fstream;
-  fstream.open ((file + kExtension).c_str(), std::ios::out | std::ios::trunc | std::ios::binary); 
+  fstream.open((file + kExtension).c_str(),
+               std::ios::out | std::ios::trunc | std::ios::binary);
   if (!fstream.is_open()) {
     return;
   }
 
   fstream.write(reinterpret_cast<const char*>(&header), sizeof(ktx::KtxHeader));
-  
-  char* pixels = new char[cubemap_width * cubemap_height * 3 * 6 * sizeof(float)];
+
+  char* pixels =
+      new char[cubemap_width * cubemap_height * 3 * 6 * sizeof(float)];
   for (int mip = 0; mip < num_mips; ++mip) {
     // Image size for all 6 faces of this mip.
     unsigned int mip_width = cubemap_width * std::pow(0.5, mip);
     unsigned int mip_height = cubemap_height * std::pow(0.5, mip);
     uint32_t image_size = mip_width * mip_height * 3 * sizeof(float);
     fstream.write(reinterpret_cast<const char*>(&image_size), sizeof(uint32_t));
-    
+
     glBindTexture(GL_TEXTURE_CUBE_MAP, texture);
     for (int i = 0; i < 6; ++i) {
       size_t offset = image_size * i;
@@ -528,6 +532,149 @@ void WriteCubemapToKtx(std::string file, unsigned int texture,
     };
 
     fstream.write(pixels, image_size * 6);
+  }
+
+  delete[] pixels;
+  fstream.close();
+}
+
+GLenum GetTextureFormatForAstc(int footprint_x, int footprint_y) {
+  switch (footprint_x) {
+    case 4: {
+      switch (footprint_y) {
+        case 4: {
+          return GL_COMPRESSED_RGBA_ASTC_4x4;
+        }
+      }
+    } break;
+    case 5: {
+      switch (footprint_y) {
+        case 4: {
+          return GL_COMPRESSED_RGBA_ASTC_5x4;
+        }
+        case 5: {
+          return GL_COMPRESSED_RGBA_ASTC_5x5;
+        }
+      }
+    } break;
+    case 6: {
+      switch (footprint_y) {
+        case 5: {
+          return GL_COMPRESSED_RGBA_ASTC_6x5;
+        }
+        case 6: {
+          return GL_COMPRESSED_RGBA_ASTC_6x6;
+        }
+      }
+    } break;
+    case 8: {
+      switch (footprint_y) {
+        case 5: {
+          return GL_COMPRESSED_RGBA_ASTC_8x5;
+        }
+        case 6: {
+          return GL_COMPRESSED_RGBA_ASTC_8x6;
+        }
+        case 8: {
+          return GL_COMPRESSED_RGBA_ASTC_8x8;
+        }
+      }
+    } break;
+    case 10: {
+      switch (footprint_y) {
+        case 5: {
+          return GL_COMPRESSED_RGBA_ASTC_10x5;
+        }
+        case 6: {
+          return GL_COMPRESSED_RGBA_ASTC_10x6;
+        }
+        case 8: {
+          return GL_COMPRESSED_RGBA_ASTC_10x8;
+        }
+        case 10: {
+          return GL_COMPRESSED_RGBA_ASTC_10x10;
+        }
+      }
+    } break;
+    case 12: {
+      switch (footprint_y) {
+        case 10: {
+          return GL_COMPRESSED_RGBA_ASTC_12x10;
+        }
+        case 12: {
+          return GL_COMPRESSED_RGBA_ASTC_12x12;
+        }
+      }
+    } break;
+    default: {
+      assert(false);
+      return GL_COMPRESSED_RGBA_ASTC_4x4;
+    }
+  }
+}
+
+void WriteCubemapToKtxAsASTC(std::string file, unsigned int texture,
+                             int cubemap_width, int cubemap_height,
+                             int num_mips = 1, int footprint_x = 4,
+                             int footprint_y = 4) {
+  static const std::string kExtension = ".ktx";
+  ktx::KtxHeader header;
+  header.gl_type = 0;  // Compressed texture must be 0.
+  header.gl_format = GL_RGB;
+  header.gl_internal_format = GetTextureFormatForAstc(footprint_x, footprint_y);
+  header.gl_base_internal_format = GL_RGB;
+  header.pixel_width = cubemap_width;
+  header.pixel_height = cubemap_height;
+  header.pixel_depth = 0;
+  header.number_of_array_elements = 0;
+  header.number_of_faces = 6;
+  header.number_of_mipmap_levels = num_mips;
+  header.bytes_of_key_value_data = 0;
+
+  std::ofstream fstream;
+  fstream.open((file + kExtension).c_str(),
+               std::ios::out | std::ios::trunc | std::ios::binary);
+  if (!fstream.is_open()) {
+    return;
+  }
+
+  fstream.write(reinterpret_cast<const char*>(&header), sizeof(ktx::KtxHeader));
+
+  char* pixels =
+      new char[cubemap_width * cubemap_height * 3 * 6 * sizeof(float)];
+  uint8_t* astc_data;
+  size_t astc_size;
+
+  for (int mip = 0; mip < num_mips; ++mip) {
+    bool write_size = true;
+
+    // Image size for all 6 faces of this mip.
+    unsigned int mip_width = cubemap_width * std::pow(0.5, mip);
+    unsigned int mip_height = cubemap_height * std::pow(0.5, mip);
+    uint32_t image_size = mip_width * mip_height * 3 * sizeof(float);
+
+    glBindTexture(GL_TEXTURE_CUBE_MAP, texture);
+    for (int i = 0; i < 6; ++i) {
+      size_t offset = image_size * i;
+      glGetTexImage(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, mip, GL_RGB, GL_FLOAT,
+                    static_cast<void*>(pixels + offset));
+
+      // Convert to ASTC.
+      EncodeAstc(pixels + offset, mip_width, mip_height, GL_RGB, GL_FLOAT,
+                 &astc_data, &astc_size, footprint_x, footprint_y);
+
+      if (!astc_data) {
+        assert(false);
+      }
+
+      if (write_size) {
+        fstream.write(reinterpret_cast<const char*>(&astc_size),
+                      sizeof(uint32_t));
+        write_size = false;
+      }
+      fstream.write(reinterpret_cast<const char*>(astc_data), astc_size);
+      delete[] astc_data;
+    }
   }
 
   delete[] pixels;
@@ -545,21 +692,24 @@ int main(int argc, char* argv[]) {
   // map.
   glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 
-  const int cubemap_width = 1024;
-  const int cubemap_height = 1024;
+  const int cubemap_width = 256;
+  const int cubemap_height = 256;
   const int irradiance_width = 128;
   const int irradiance_height = 128;
-  const int prefilter_width = 1024;
-  const int prefilter_height = 1024;
+  const int prefilter_width = 256;
+  const int prefilter_height = 256;
 
-  unsigned int cubemap_texture =
-      ConvertEquirectangularToCubemap("data/source.hdr", cubemap_width, cubemap_height);
+  unsigned int cubemap_texture = ConvertEquirectangularToCubemap(
+      "data/source.hdr", cubemap_width, cubemap_height);
   WriteCubemapToFile("cubemap", cubemap_texture, cubemap_width, cubemap_height);
-  WriteCubemapToKtx("cubemap", cubemap_texture, cubemap_width, cubemap_height, 1);
-  unsigned int irradiance_texture =
-      GenerateIrradianceMap(cubemap_texture, irradiance_width, irradiance_height);
-  WriteCubemapToFile("irradiance", irradiance_texture, irradiance_width, irradiance_height);
-  WriteCubemapToKtx("irradiance", irradiance_texture, irradiance_width, irradiance_height, 1);
+  WriteCubemapToKtx("cubemap", cubemap_texture, cubemap_width, cubemap_height,
+                    1);
+  unsigned int irradiance_texture = GenerateIrradianceMap(
+      cubemap_texture, irradiance_width, irradiance_height);
+  WriteCubemapToFile("irradiance", irradiance_texture, irradiance_width,
+                     irradiance_height);
+  WriteCubemapToKtx("irradiance", irradiance_texture, irradiance_width,
+                    irradiance_height, 1);
 
   // Generate the prefilter map.
   unsigned int prefilter_texture = GeneratePreFilteredMap(
@@ -573,8 +723,8 @@ int main(int argc, char* argv[]) {
     WriteCubemapToFile("prefilter_" + std::to_string(mip), prefilter_texture,
                        width, height, mip);
   }
-  WriteCubemapToKtx("prefilter", prefilter_texture, prefilter_width, prefilter_height, num_mips);
-                       
+  WriteCubemapToKtxAsASTC("prefilter", prefilter_texture, prefilter_width,
+                          prefilter_height, num_mips, 4, 4);
 
   std::cout << "Success!" << std::endl;
 
