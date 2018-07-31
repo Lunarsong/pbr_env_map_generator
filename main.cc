@@ -48,13 +48,13 @@ void RenderCube() {
         -1.0f, -1.0f, -1.0f, -1.0f, 0.0f, 0.0f, 0.0f, 1.0f,  // bottom-left
         -1.0f, -1.0f, 1.0f, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f,   // bottom-right
         -1.0f, 1.0f, 1.0f, -1.0f, 0.0f, 0.0f, 1.0f, 0.0f,    // top-right
-                                                             // right face
-        1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,      // top-left
-        1.0f, -1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f,    // bottom-right
-        1.0f, 1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f,     // top-right
-        1.0f, -1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f,    // bottom-right
-        1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,      // top-left
-        1.0f, -1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,     // bottom-left
+        // right face
+        1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,    // top-left
+        1.0f, -1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f,  // bottom-right
+        1.0f, 1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f,   // top-right
+        1.0f, -1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f,  // bottom-right
+        1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,    // top-left
+        1.0f, -1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,   // bottom-left
         // Bottom face.
         -1.0f, -1.0f, -1.0f, 0.0f, -1.0f, 0.0f, 0.0f, 1.0f,  // top-right
         1.0f, -1.0f, -1.0f, 0.0f, -1.0f, 0.0f, 1.0f, 1.0f,   // top-left
@@ -242,10 +242,10 @@ void RenderTextureToCubemap(unsigned int fbo, unsigned int fbo_texture,
   const mathfu::mat4 projection = mathfu::mat4::Perspective(
       DegreesToRadians(90.0f), 1.0f, 0.1f, 10.0f, -1.0f);
   const mathfu::mat4 views[] = {
-      mathfu::mat4::LookAt(mathfu::vec3(1.0f, 0.0f, 0.0f),
+      mathfu::mat4::LookAt(mathfu::vec3(-1.0f, 0.0f, 0.0f),
                            mathfu::vec3(0.0f, 0.0f, 0.0f),
                            mathfu::vec3(0.0f, -1.0f, 0.0f)),
-      mathfu::mat4::LookAt(mathfu::vec3(-1.0f, 0.0f, 0.0f),
+      mathfu::mat4::LookAt(mathfu::vec3(1.0f, 0.0f, 0.0f),
                            mathfu::vec3(0.0f, 0.0f, 0.0f),
                            mathfu::vec3(0.0f, -1.0f, 0.0f)),
       mathfu::mat4::LookAt(mathfu::vec3(0.0f, 1.0f, 0.0f),
