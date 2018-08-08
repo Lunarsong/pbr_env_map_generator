@@ -2,6 +2,7 @@
 
 #include <softfloat.h>
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <iostream>
 
@@ -460,14 +461,6 @@ static void copy_scanline(void* dst, const void* src, int pixels, int method) {
       COPY_LA(uint16_t, uint32_t, f32_sf16, 0x3C00);
   };
 }
-
-enum class CompressionSpeed {
-  kVeryFast = 0,
-  kFast,
-  kMedium,
-  kThorough,
-  kExhaustive,
-};
 
 void GetCompressionSpeedParameters(
     const CompressionSpeed speed, const int footprint_x, const int footprint_y,
@@ -1052,7 +1045,8 @@ astc_codec_image* CreateAstcCodecImageFromGl(const void* pixels, int size_x,
 
 void EncodeAstc(const void* pixels, int width, int height, uint32_t gl_format,
                 uint32_t gl_type, uint8_t** out_data, size_t* out_size,
-                int footprint_x, int footprint_y) {
+                int footprint_x, int footprint_y,
+                CompressionSpeed compression_speed) {
   // initialization routines
   prepare_angular_tables();
   build_quantization_mode_table();
@@ -1108,10 +1102,10 @@ void EncodeAstc(const void* pixels, int width, int height, uint32_t gl_format,
 
   int pcdiv = 1;
 
-  GetCompressionSpeedParameters(
-      CompressionSpeed::kThorough, footprint_x, footprint_y, footprint_z,
-      &plimit_autoset, &oplimit_autoset, &dblimit_autoset, &bmc_autoset,
-      &mincorrel_autoset, &maxiters_autoset, &pcdiv);
+  GetCompressionSpeedParameters(compression_speed, footprint_x, footprint_y,
+                                footprint_z, &plimit_autoset, &oplimit_autoset,
+                                &dblimit_autoset, &bmc_autoset,
+                                &mincorrel_autoset, &maxiters_autoset, &pcdiv);
 
   int partitions_to_test = plimit_autoset;
   float dblimit = dblimit_autoset;
