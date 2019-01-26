@@ -19,6 +19,11 @@ cc_binary(
         "data/prefilter.glslv",
         "data/cubemap.glslf",
         "data/cubemap.glslv",
+        "data/brdf.glslf",
+        "data/brdf.glslv",
+    ],
+    copts = [
+        "-D__cplusplus=201103L"
     ],
     visibility = ["//visibility:public"],
 )

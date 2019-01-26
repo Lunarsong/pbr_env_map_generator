@@ -96,6 +96,36 @@ void RenderCube() {
   glBindVertexArray(0);
 }
 
+// Draws a 1x1 XY quad in NDC
+void RenderQuad() {
+  static unsigned int quad_vao = 0;
+  static unsigned int quad_vbo = 0;
+  if (quad_vao == 0) {
+    float quadVertices[] = {
+        // positions        // texture Coords
+        -1.0f, 1.0f, 0.0f, 0.0f, 1.0f, -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+        1.0f,  1.0f, 0.0f, 1.0f, 1.0f, 1.0f,  -1.0f, 0.0f, 1.0f, 0.0f,
+    };
+    // setup plane VAO
+    glGenVertexArrays(1, &quad_vao);
+    glGenBuffers(1, &quad_vbo);
+    glBindVertexArray(quad_vao);
+    glBindBuffer(GL_ARRAY_BUFFER, quad_vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices,
+                 GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float),
+                          (void*)0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float),
+                          (void*)(3 * sizeof(float)));
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+  }
+  glBindVertexArray(quad_vao);
+  glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+  glBindVertexArray(0);
+}
+
 bool LoadFile(const char* path, char** mem, size_t* size) {
   assert(size);
   assert(mem);
@@ -323,16 +353,9 @@ unsigned int ConvertEquirectangularToCubemap(const char* file,
   GLint old_fbo;
   glGetIntegerv(GL_FRAMEBUFFER_BINDING, &old_fbo);
 
-  GLuint fbo, rbo;
+  GLuint fbo;
   glGenFramebuffers(1, &fbo);
-  glGenRenderbuffers(1, &rbo);
-
   glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-  glBindRenderbuffer(GL_RENDERBUFFER, rbo);
-  glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, cubemap_width,
-                        cubemap_height);
-  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-                            GL_RENDERBUFFER, rbo);
 
   // Generate the textures for the framebuffer.
   unsigned int cubemap;
@@ -361,6 +384,8 @@ unsigned int ConvertEquirectangularToCubemap(const char* file,
   glBindTexture(GL_TEXTURE_CUBE_MAP, cubemap);
   glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
 
+  glDeleteFramebuffers(1, &fbo);
+
   return cubemap;
 }
 
@@ -370,16 +395,9 @@ unsigned int GenerateIrradianceMap(unsigned int texture, int cubemap_width,
   GLint old_fbo;
   glGetIntegerv(GL_FRAMEBUFFER_BINDING, &old_fbo);
 
-  GLuint fbo, rbo;
+  GLuint fbo;
   glGenFramebuffers(1, &fbo);
-  glGenRenderbuffers(1, &rbo);
-
   glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-  glBindRenderbuffer(GL_RENDERBUFFER, rbo);
-  glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, cubemap_width,
-                        cubemap_height);
-  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-                            GL_RENDERBUFFER, rbo);
 
   // Generate the textures for the framebuffer.
   unsigned int cubemap;
@@ -402,6 +420,8 @@ unsigned int GenerateIrradianceMap(unsigned int texture, int cubemap_width,
   glBindTexture(GL_TEXTURE_CUBE_MAP, texture);
   RenderTextureToCubemap(fbo, cubemap, cubemap_width, cubemap_height,
                          LoadShader("data/irradiance_convolution"));
+
+  glDeleteFramebuffers(1, &fbo);
 
   return cubemap;
 }
@@ -449,7 +469,44 @@ unsigned int GeneratePreFilteredMap(unsigned int texture, int cubemap_width,
   }
 
   glBindFramebuffer(GL_FRAMEBUFFER, old_fbo);
+  glDeleteFramebuffers(1, &fbo);
   return cubemap;
+}
+
+unsigned int GenerateBRDFLookUpTable(int width, int height) {
+  GLint old_fbo;
+  glGetIntegerv(GL_FRAMEBUFFER_BINDING, &old_fbo);
+  unsigned int shader = LoadShader("data/brdf");
+
+  // Generate the textures for the framebuffer.
+  unsigned int brdf_lut_texture;
+  glGenTextures(1, &brdf_lut_texture);
+  glBindTexture(GL_TEXTURE_2D, brdf_lut_texture);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RG16F, width, height, 0, GL_RG, GL_FLOAT,
+               nullptr);
+
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+  // Create framebuffer.
+  GLuint fbo;
+  glGenFramebuffers(1, &fbo);
+
+  glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+                         brdf_lut_texture, 0);
+
+  // Draw the full screen quad.
+  glViewport(0, 0, width, height);
+  glUseProgram(shader);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  RenderQuad();
+
+  glBindFramebuffer(GL_FRAMEBUFFER, old_fbo);
+  glDeleteFramebuffers(1, &fbo);
+  return brdf_lut_texture;
 }
 
 void WriteCubemapToFile(std::string file, unsigned int texture,
@@ -494,10 +551,10 @@ void WriteCubemapToKtx(std::string file, unsigned int texture,
                        int num_mips = 1) {
   static const std::string kExtension = ".ktx";
   ktx::KtxHeader header;
-  header.gl_type = GL_FLOAT;
-  header.gl_format = GL_RGB;
-  header.gl_internal_format = GL_RGB16F;
-  header.gl_base_internal_format = GL_RGB;
+  header.gl_type = GL_HALF_FLOAT;
+  header.gl_format = GL_RGBA;
+  header.gl_internal_format = GL_RGBA16F;
+  header.gl_base_internal_format = GL_RGBA;
   header.pixel_width = cubemap_width;
   header.pixel_height = cubemap_height;
   header.pixel_depth = 0;
@@ -516,19 +573,19 @@ void WriteCubemapToKtx(std::string file, unsigned int texture,
   fstream.write(reinterpret_cast<const char*>(&header), sizeof(ktx::KtxHeader));
 
   char* pixels =
-      new char[cubemap_width * cubemap_height * 3 * 6 * sizeof(float)];
+      new char[cubemap_width * cubemap_height * 4 * 6 * sizeof(float) / 2];
   for (int mip = 0; mip < num_mips; ++mip) {
     // Image size for all 6 faces of this mip.
     unsigned int mip_width = cubemap_width * std::pow(0.5, mip);
     unsigned int mip_height = cubemap_height * std::pow(0.5, mip);
-    uint32_t image_size = mip_width * mip_height * 3 * sizeof(float);
+    uint32_t image_size = mip_width * mip_height * 4 * sizeof(float) / 2;
     fstream.write(reinterpret_cast<const char*>(&image_size), sizeof(uint32_t));
 
     glBindTexture(GL_TEXTURE_CUBE_MAP, texture);
     for (int i = 0; i < 6; ++i) {
       size_t offset = image_size * i;
-      glGetTexImage(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, mip, GL_RGB, GL_FLOAT,
-                    static_cast<void*>(pixels + offset));
+      glGetTexImage(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, mip, GL_RGBA,
+                    GL_HALF_FLOAT, static_cast<void*>(pixels + offset));
     };
 
     fstream.write(pixels, image_size * 6);
@@ -682,6 +739,51 @@ void WriteCubemapToKtxAsASTC(std::string file, unsigned int texture,
   fstream.close();
 }
 
+void WriteBrdfToKtx(std::string file, unsigned int texture, int width,
+                    int height) {
+  static const std::string kExtension = ".ktx";
+  ktx::KtxHeader header;
+  header.gl_type = GL_HALF_FLOAT;
+  header.gl_format = GL_RG;
+  header.gl_internal_format = GL_RG16F;
+  header.gl_base_internal_format = GL_RG;
+  header.pixel_width = width;
+  header.pixel_height = height;
+  header.pixel_depth = 0;
+  header.number_of_array_elements = 0;
+  header.number_of_faces = 1;
+  header.number_of_mipmap_levels = 1;
+  header.bytes_of_key_value_data = 0;
+
+  std::ofstream fstream;
+  fstream.open((file + kExtension).c_str(),
+               std::ios::out | std::ios::trunc | std::ios::binary);
+  if (!fstream.is_open()) {
+    return;
+  }
+
+  fstream.write(reinterpret_cast<const char*>(&header), sizeof(ktx::KtxHeader));
+
+  uint32_t image_size = width * height * 2 * sizeof(float) / 2;
+  char* pixels = new char[image_size];
+  fstream.write(reinterpret_cast<const char*>(&image_size), sizeof(uint32_t));
+
+  glBindTexture(GL_TEXTURE_2D, texture);
+  glGetTexImage(GL_TEXTURE_2D, 0, GL_RG, GL_HALF_FLOAT,
+                static_cast<void*>(pixels));
+
+  fstream.write(pixels, image_size);
+
+  delete[] pixels;
+  fstream.close();
+
+  pixels = new char[width * height * 3];
+  glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_UNSIGNED_BYTE,
+                static_cast<void*>(pixels));
+  stbi_write_png((file + ".png").c_str(), width, height, 3, pixels, 0);
+  delete[] pixels;
+}
+
 int main(int argc, char* argv[]) {
   stbi_set_flip_vertically_on_load(true);
   GLFWwindow* window = InitWindow();
@@ -693,12 +795,12 @@ int main(int argc, char* argv[]) {
   // map.
   glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 
-  const int cubemap_width = 256;
-  const int cubemap_height = 256;
+  const int cubemap_width = 512;
+  const int cubemap_height = 512;
   const int irradiance_width = 128;
   const int irradiance_height = 128;
-  const int prefilter_width = 256;
-  const int prefilter_height = 256;
+  const int prefilter_width = 512;
+  const int prefilter_height = 512;
 
   unsigned int cubemap_texture = ConvertEquirectangularToCubemap(
       "data/source.hdr", cubemap_width, cubemap_height);
@@ -713,6 +815,7 @@ int main(int argc, char* argv[]) {
                     irradiance_height, 1);
   WriteCubemapToKtxAsASTC("irradiance_astc", irradiance_texture,
                           irradiance_width, irradiance_height, 1);
+  glDeleteTextures(1, &irradiance_texture);
 
   // Generate the prefilter map.
   unsigned int prefilter_texture = GeneratePreFilteredMap(
@@ -728,8 +831,14 @@ int main(int argc, char* argv[]) {
   }
   WriteCubemapToKtx("prefilter", prefilter_texture, prefilter_width,
                     prefilter_height, num_mips);
+  glDeleteTextures(1, &prefilter_texture);
   WriteCubemapToKtxAsASTC("prefilter_astc", prefilter_texture, prefilter_width,
                           prefilter_height, num_mips, 4, 4);
+
+  unsigned int brdf_lut_texture = GenerateBRDFLookUpTable(512, 512);
+  WriteBrdfToKtx("brdf", brdf_lut_texture, 512, 512);
+  glDeleteTextures(1, &brdf_lut_texture);
+  glDeleteTextures(1, &cubemap_texture);
 
   std::cout << "Success!" << std::endl;
 
