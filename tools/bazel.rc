@@ -1,2 +1,4 @@
-//build --cxxopt="/std:c++11"
+build --cxxopt="/std:c++11"
 build --cxxopt="--std=c++11"
+build --experimental_enable_runfiles
+build --incompatible_remove_native_git_repository=false

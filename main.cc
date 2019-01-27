@@ -797,8 +797,8 @@ int main(int argc, char* argv[]) {
 
   const int cubemap_width = 512;
   const int cubemap_height = 512;
-  const int irradiance_width = 128;
-  const int irradiance_height = 128;
+  const int irradiance_width = 32;
+  const int irradiance_height = 32;
   const int prefilter_width = 512;
   const int prefilter_height = 512;
 
